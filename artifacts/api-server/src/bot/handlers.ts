@@ -175,9 +175,15 @@ export function registerHandlers(bot: TelegramBot): void {
         chatId,
         "🆘 *Customer Support*\n\n" +
           "If you face any problems, need to recharge balance, or have any questions, please contact the admin directly:\n\n" +
-          "👤 *Admin Contact:* @Rakib\\_2H\n" +
-          "🔗 *Direct Chat:* https://t.me/Rakib\\_2H",
-        { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+          "👤 *Direct Admin Contact*",
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "💬 Chat", url: "https://t.me/Rakib_2H" }],
+            ],
+          },
+        },
       );
       return;
     }
