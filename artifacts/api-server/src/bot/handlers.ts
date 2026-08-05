@@ -9,6 +9,7 @@ import { formatCountry, toDisplayName } from "./countries";
 import { getState, setState, clearOrderState } from "./state";
 import { getOrCreateWallet } from "./wallet";
 import { getReferralCode, getReferralStats, processReferral } from "./referral";
+import { checkMembership, sendJoinPrompt } from "./membership";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -128,6 +129,13 @@ export function registerHandlers(bot: TelegramBot): void {
     if (!msg.text || msg.text.startsWith("/")) return;
     const chatId = msg.chat.id;
     const text = msg.text.trim();
+
+    // ── Force-subscription gate ───────────────────────────────────────────────
+    const membership = await checkMembership(bot, msg.from!.id);
+    if (!membership.joined) {
+      await sendJoinPrompt(bot, chatId, membership);
+      return;
+    }
 
     if (text === "📱 GET NUMBER") {
       await safeSend(
@@ -263,6 +271,50 @@ export function registerHandlers(bot: TelegramBot): void {
       await bot.answerCallbackQuery(query.id);
     } catch {
       // ignore
+    }
+
+    // ── Verify membership ─────────────────────────────────────────────────────
+    if (data === "verify_membership") {
+      const status = await checkMembership(bot, userId);
+      if (status.joined) {
+        try {
+          await bot.editMessageText("✅ *Verify Successful!*\n\nWelcome! You can now use all features.", {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+          });
+        } catch {
+          await safeSend(bot, chatId, "✅ *Verify Successful!* You can now use all features.", {
+            parse_mode: "Markdown",
+          });
+        }
+        await safeSend(bot, chatId, "Choose an option below:", {
+          reply_markup: mainMenuKeyboard(),
+        });
+      } else {
+        try {
+          await bot.editMessageText(
+            "❌ *Verification Failed*\n\nYou have not joined all required chats yet. Please join and try again.",
+            {
+              chat_id: chatId,
+              message_id: query.message.message_id,
+              parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "📢 Join Channel", url: "https://t.me/RakibCryptoTech" },
+                    { text: "👥 Join Group", url: "https://t.me/Rakibul_Otp_Rcv" },
+                  ],
+                  [{ text: "✅ Verify", callback_data: "verify_membership" }],
+                ],
+              },
+            },
+          );
+        } catch {
+          await sendJoinPrompt(bot, chatId, status);
+        }
+      }
+      return;
     }
 
     // ── Service selected ──────────────────────────────────────────────────────
