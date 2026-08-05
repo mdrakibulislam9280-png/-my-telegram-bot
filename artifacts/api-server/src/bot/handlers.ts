@@ -96,7 +96,7 @@ export function registerHandlers(bot: TelegramBot): void {
     await safeSend(
       bot,
       chatId,
-      "👋 *Welcome to 5sim Virtual Number Bot!*\n\nChoose an option below:",
+      "👋 *Welcome to Rakibul Number Bot!*\n\nChoose an option below:",
       {
         parse_mode: "Markdown",
         reply_markup: mainMenuKeyboard(),
