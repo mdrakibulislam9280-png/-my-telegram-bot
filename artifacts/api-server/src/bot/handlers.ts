@@ -189,20 +189,9 @@ export function registerHandlers(bot: TelegramBot): void {
     }
 
     if (text === "🆕 আমি নতুন") {
-      await safeSend(
-        bot,
-        chatId,
-        "🆕 *আমি নতুন — স্বাগতম!*\n\n" +
-          "এই বট দিয়ে আপনি 5sim থেকে ভার্চুয়াল নম্বর কিনতে পারবেন।\n\n" +
-          "*কিভাবে শুরু করবেন:*\n" +
-          "1️⃣ *GET NUMBER* বাটন চাপুন\n" +
-          "2️⃣ আপনার সার্ভিস বেছে নিন (Facebook, Instagram, TikTok)\n" +
-          "3️⃣ দেশ বেছে নিন\n" +
-          "4️⃣ নম্বর পাবেন — SMS কোড আসার জন্য অপেক্ষা করুন\n\n" +
-          "💰 *ব্যালেন্স* দেখতে BALANCE বাটন চাপুন।\n" +
-          "5sim অ্যাকাউন্ট না থাকলে 👉 https://5sim.net এ সাইন আপ করুন।",
-        { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
-      );
+      await safeSend(bot, chatId, "🚧 This feature is coming soon!", {
+        reply_markup: mainMenuKeyboard(),
+      });
       return;
     }
 
