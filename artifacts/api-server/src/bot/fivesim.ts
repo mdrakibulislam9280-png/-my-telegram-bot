@@ -62,6 +62,36 @@ export async function getAvailableCountries(
 }
 
 /**
+ * Fetch the top N countries by total stock for a product.
+ * Returns entries sorted descending by stock count.
+ */
+export async function getTopCountriesByStock(
+  product: string,
+  limit = 5,
+): Promise<{ country: string; count: number }[]> {
+  const url = `${BASE_URL}/v1/guest/prices?product=${encodeURIComponent(product)}`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`5sim prices API error: ${res.status}`);
+  }
+  const data = (await res.json()) as PricesResponse;
+
+  const totals: { country: string; count: number }[] = [];
+  for (const [country, operators] of Object.entries(data)) {
+    const total = Object.values(operators).reduce(
+      (sum, op) => sum + (op.count ?? 0),
+      0,
+    );
+    if (total > 0) totals.push({ country, count: total });
+  }
+
+  totals.sort((a, b) => b.count - a.count);
+  return totals.slice(0, limit);
+}
+
+/**
  * Buy an activation number.
  * Returns the Order on success, throws on failure.
  */

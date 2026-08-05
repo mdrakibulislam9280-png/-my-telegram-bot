@@ -2,6 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import { logger } from "../lib/logger";
 import {
   getAvailableCountries,
+  getTopCountriesByStock,
   buyNumber,
   cancelOrder,
   getUserProfile,
@@ -148,23 +149,43 @@ export function registerHandlers(bot: TelegramBot): void {
     }
 
     if (text === "📊 TRAFFIC") {
+      // Show a loading message first so the user knows we're fetching
+      await safeSend(bot, chatId, "🔍 Fetching live traffic data…");
+
       try {
-        const profile = await getUserProfile();
-        await safeSend(
-          bot,
-          chatId,
-          `📊 *Your 5sim Account Info*\n\n` +
-            `👤 Email: ${profile.email}\n` +
-            `💵 Balance: $${profile.balance.toFixed(2)}\n` +
-            `⭐ Rating: ${profile.rating}`,
-          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
-        );
+        // Fetch top countries for all 3 services in parallel
+        const [fbTop, igTop, ttTop] = await Promise.all([
+          getTopCountriesByStock("facebook", 5),
+          getTopCountriesByStock("instagram", 5),
+          getTopCountriesByStock("tiktok", 5),
+        ]);
+
+        const formatLines = (
+          entries: { country: string; count: number }[],
+        ): string => {
+          if (entries.length === 0) return "  • No stock available right now";
+          return entries
+            .map((e) => `• ${formatCountry(e.country)} (High Stock)`)
+            .join("\n");
+        };
+
+        const msg =
+          `🔥 *High Traffic & Fast OTP Countries* 🔥\n\n` +
+          `🇫 *FACEBOOK:*\n${formatLines(fbTop)}\n\n` +
+          `🟢 *INSTAGRAM:*\n${formatLines(igTop)}\n\n` +
+          `🖤 *TIKTOK:*\n${formatLines(ttTop)}\n\n` +
+          `💡 *Tip:* Buy numbers from these high-traffic countries for faster OTP delivery!`;
+
+        await safeSend(bot, chatId, msg, {
+          parse_mode: "Markdown",
+          reply_markup: mainMenuKeyboard(),
+        });
       } catch (err) {
         logger.error({ err }, "Traffic fetch failed");
         await safeSend(
           bot,
           chatId,
-          "⚠️ Could not fetch account info. Please try again later.",
+          "⚠️ Could not fetch traffic data. Please try again later.",
           { reply_markup: mainMenuKeyboard() },
         );
       }
