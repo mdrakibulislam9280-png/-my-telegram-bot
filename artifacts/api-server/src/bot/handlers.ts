@@ -173,11 +173,10 @@ export function registerHandlers(bot: TelegramBot): void {
       await safeSend(
         bot,
         chatId,
-        "🆘 *Support*\n\n" +
-          "For help with your 5sim account:\n" +
-          "🌐 Website: https://5sim.net\n" +
-          "📧 Support: https://5sim.net/support\n\n" +
-          "For bot issues, contact your bot administrator.",
+        "🆘 *Customer Support*\n\n" +
+          "If you face any problems, need to recharge balance, or have any questions, please contact the admin directly:\n\n" +
+          "👤 *Admin Contact:* @Rakib\\_2H\n" +
+          "🔗 *Direct Chat:* https://t.me/Rakib\\_2H",
         { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
       );
       return;
