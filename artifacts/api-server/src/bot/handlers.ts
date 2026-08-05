@@ -4,10 +4,10 @@ import {
   getAvailableCountries,
   buyNumber,
   cancelOrder,
-  getUserProfile,
 } from "./fivesim";
 import { formatCountry, toDisplayName } from "./countries";
 import { getState, setState, clearOrderState } from "./state";
+import { getOrCreateWallet } from "./wallet";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -125,14 +125,15 @@ export function registerHandlers(bot: TelegramBot): void {
 
     if (text === "💰 BALANCE") {
       try {
-        const profile = await getUserProfile();
+        const wallet = await getOrCreateWallet(msg.from!.id);
         await safeSend(
           bot,
           chatId,
-          `💰 *Your 5sim Balance*\n\n` +
-            `👤 Email: ${profile.email}\n` +
-            `💵 Balance: *$${profile.balance.toFixed(2)}*\n` +
-            `⭐ Rating: ${profile.rating}`,
+          `💰 *Your Account Balance*\n\n` +
+            `👤 User ID: ${msg.from!.id}\n` +
+            `💳 Balance: *${parseFloat(wallet.balanceBdt).toFixed(2)} BDT*\n` +
+            `📊 Total Orders: ${wallet.totalOrders}\n\n` +
+            `💡 To deposit funds into your wallet, please contact support.`,
           { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
         );
       } catch (err) {
