@@ -1,45 +1,51 @@
-# [Project name]
+# Project Overview
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
-
-## Run & Operate
-
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+A pnpm monorepo containing a Telegram bot + Express API server backed by PostgreSQL, with shared TypeScript libraries.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- **Runtime**: Node.js (ESM)
+- **API server**: Express 5, TypeScript, esbuild (bundled for dev & prod)
+- **Database**: PostgreSQL via Drizzle ORM
+- **Bot**: Telegram (`node-telegram-bot-api`) — optional, enabled when `TELEGRAM_BOT_TOKEN` is set
+- **Package manager**: pnpm (workspaces)
 
-## Where things live
+## Project structure
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+```
+artifacts/
+  api-server/       Express API + Telegram bot
+  mockup-sandbox/   Vite/React component preview sandbox
+lib/
+  db/               Drizzle ORM schema & client
+  api-zod/          Zod validation schemas shared across server/client
+  api-client-react/ React Query hooks generated from OpenAPI spec
+  api-spec/         OpenAPI spec + Orval codegen config
+scripts/            Utility scripts
+```
 
-## Architecture decisions
+## Running locally (Replit)
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+Both services start automatically via configured workflows:
 
-## Product
+| Service | Workflow name | Preview path |
+|---------|--------------|--------------|
+| API server | `artifacts/api-server: API Server` | `/api` |
+| Mockup sandbox | `artifacts/mockup-sandbox: Component Preview Server` | `/__mockup` |
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | ✅ Yes | PostgreSQL connection string |
+| `SESSION_SECRET` | ✅ Yes | Express session secret |
+| `TELEGRAM_BOT_TOKEN` | ⚠️ Optional | Telegram bot token — bot is skipped if not set |
+| `PORT` | Auto-set | Assigned by Replit per artifact |
+
+## API endpoints
+
+- `GET /api/healthz` — health check, returns `{"status":"ok"}`
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+<!-- Add user preferences here -->
