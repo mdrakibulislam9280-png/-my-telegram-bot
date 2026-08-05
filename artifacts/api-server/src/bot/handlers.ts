@@ -8,6 +8,7 @@ import {
 import { formatCountry, toDisplayName } from "./countries";
 import { getState, setState, clearOrderState } from "./state";
 import { getOrCreateWallet } from "./wallet";
+import { getReferralCode, getReferralStats, processReferral } from "./referral";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ function mainMenuKeyboard(): TelegramBot.ReplyKeyboardMarkup {
     keyboard: [
       [{ text: "📱 GET NUMBER" }, { text: "📊 TRAFFIC" }],
       [{ text: "💰 BALANCE" }, { text: "🆘 SUPPORT" }],
-      [{ text: "🆕 আমি নতুন" }],
+      [{ text: "🆕 আমি নতুন" }, { text: "🎁 REFER" }],
     ],
     resize_keyboard: true,
     one_time_keyboard: false,
@@ -90,9 +91,27 @@ async function safeSend(
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export function registerHandlers(bot: TelegramBot): void {
-  // /start command
-  bot.onText(/\/start/, async (msg) => {
+  // /start command — also handles referral deep links (/start ref_<id>)
+  bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
+    const userId = msg.from!.id;
+    const param = match?.[1]?.trim();
+
+    // Process referral if a code was passed
+    if (param?.startsWith("ref_")) {
+      // Ensure referred user has a wallet first
+      await getOrCreateWallet(userId);
+      const result = await processReferral(userId, param);
+      if (result === "credited") {
+        await safeSend(
+          bot,
+          chatId,
+          "🎉 *Referral Applied!*\n\nYou joined via a referral link. Your referrer has been rewarded.",
+          { parse_mode: "Markdown" },
+        );
+      }
+    }
+
     await safeSend(
       bot,
       chatId,
@@ -192,6 +211,37 @@ export function registerHandlers(bot: TelegramBot): void {
       await safeSend(bot, chatId, "🚧 This feature is coming soon!", {
         reply_markup: mainMenuKeyboard(),
       });
+      return;
+    }
+
+    if (text === "🎁 REFER") {
+      try {
+        const [stats, me] = await Promise.all([
+          getReferralStats(msg.from!.id),
+          bot.getMe(),
+        ]);
+        const code = getReferralCode(msg.from!.id);
+        const link = `https://t.me/${me.username}?start=${code}`;
+        await safeSend(
+          bot,
+          chatId,
+          `🎁 *Your Referral Link*\n\n` +
+            `👇 Share this link with your friends:\n\`${link}\`\n\n` +
+            `প্রতিটি সঠিক রেফারের জন্য আপনি ০.১০ টাকা করে পাবেন।\n\n` +
+            `📊 *Your Referral Stats*\n` +
+            `👥 Total Referred: *${stats.referralCount}* users\n` +
+            `💵 Total Earned: *${parseFloat(stats.referralEarningsBdt).toFixed(2)} BDT*`,
+          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+        );
+      } catch (err) {
+        logger.error({ err }, "Referral stats fetch failed");
+        await safeSend(
+          bot,
+          chatId,
+          "⚠️ Could not fetch your referral info. Please try again later.",
+          { reply_markup: mainMenuKeyboard() },
+        );
+      }
       return;
     }
 

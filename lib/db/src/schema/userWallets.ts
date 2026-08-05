@@ -8,6 +8,10 @@ export const userWalletsTable = pgTable("user_wallets", {
     .notNull()
     .default("0.00"),
   totalOrders: integer("total_orders").notNull().default(0),
+  referralCount: integer("referral_count").notNull().default(0),
+  referralEarningsBdt: numeric("referral_earnings_bdt", { precision: 12, scale: 2 })
+    .notNull()
+    .default("0.00"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
