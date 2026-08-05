@@ -174,7 +174,7 @@ export function registerHandlers(bot: TelegramBot): void {
         bot,
         chatId,
         "🆘 *Customer Support*\n\n" +
-          "If you face any problems, need to recharge balance, or have any questions, please contact the admin directly:\n\n" +
+          "If you face any problems, please contact the admin directly:\n\n" +
           "👤 *Direct Admin Contact*",
         {
           parse_mode: "Markdown",
