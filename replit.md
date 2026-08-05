@@ -39,7 +39,8 @@ Both services start automatically via configured workflows:
 |----------|----------|-------------|
 | `DATABASE_URL` | ✅ Yes | PostgreSQL connection string |
 | `SESSION_SECRET` | ✅ Yes | Express session secret |
-| `TELEGRAM_BOT_TOKEN` | ⚠️ Optional | Telegram bot token — bot is skipped if not set |
+| `TELEGRAM_BOT_TOKEN` | ✅ Yes | Telegram bot token from @BotFather — server exits without it |
+| `FIVESIM_API_KEY` | ✅ Yes | 5sim.net API key for purchasing virtual numbers |
 | `PORT` | Auto-set | Assigned by Replit per artifact |
 
 ## API endpoints
