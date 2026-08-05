@@ -1,0 +1,412 @@
+import TelegramBot from "node-telegram-bot-api";
+import { logger } from "../lib/logger";
+import {
+  getAvailableCountries,
+  buyNumber,
+  cancelOrder,
+  getUserProfile,
+} from "./fivesim";
+import { formatCountry, toDisplayName } from "./countries";
+import { getState, setState, clearOrderState } from "./state";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SERVICES: { label: string; code: string }[] = [
+  { label: "🇫 FACEBOOK", code: "facebook" },
+  { label: "🟢 INSTAGRAM", code: "instagram" },
+  { label: "🖤 TIKTOK", code: "tiktok" },
+];
+
+// ─── Keyboards ────────────────────────────────────────────────────────────────
+
+function mainMenuKeyboard(): TelegramBot.ReplyKeyboardMarkup {
+  return {
+    keyboard: [
+      [{ text: "📱 GET NUMBER" }, { text: "📊 TRAFFIC" }],
+      [{ text: "💰 BALANCE" }, { text: "🆘 SUPPORT" }],
+      [{ text: "🆕 আমি নতুন" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
+function serviceMenuKeyboard(): TelegramBot.InlineKeyboardMarkup {
+  const rows = SERVICES.map((s) => [
+    { text: s.label, callback_data: `service:${s.code}` },
+  ]);
+  rows.push([{ text: "❌ Close", callback_data: "close_service_menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function countryKeyboard(
+  countries: string[],
+): TelegramBot.InlineKeyboardMarkup {
+  const rows = countries.map((c) => [
+    { text: formatCountry(c), callback_data: `country:${c}` },
+  ]);
+  rows.push([{ text: "⬅️ Back", callback_data: "back_to_services" }]);
+  return { inline_keyboard: rows };
+}
+
+function cancelOrderKeyboard(
+  orderId: number,
+): TelegramBot.InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [{ text: "❌ Cancel Order", callback_data: `cancel:${orderId}` }],
+    ],
+  };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isLowBalanceError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message.toLowerCase() : "";
+  return (
+    msg.includes("no free phones") ||
+    msg.includes("not enough") ||
+    msg.includes("balance") ||
+    msg.includes("insufficient") ||
+    msg.includes("no money") ||
+    msg.includes("400") ||
+    msg.includes("payment")
+  );
+}
+
+async function safeSend(
+  bot: TelegramBot,
+  chatId: number,
+  text: string,
+  options?: TelegramBot.SendMessageOptions,
+): Promise<void> {
+  try {
+    await bot.sendMessage(chatId, text, options);
+  } catch (err) {
+    logger.error({ err, chatId }, "Failed to send message");
+  }
+}
+
+// ─── Handlers ─────────────────────────────────────────────────────────────────
+
+export function registerHandlers(bot: TelegramBot): void {
+  // /start command
+  bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    await safeSend(
+      bot,
+      chatId,
+      "👋 *Welcome to 5sim Virtual Number Bot!*\n\nChoose an option below:",
+      {
+        parse_mode: "Markdown",
+        reply_markup: mainMenuKeyboard(),
+      },
+    );
+  });
+
+  // Text message handler — main menu routing
+  bot.on("message", async (msg) => {
+    if (!msg.text || msg.text.startsWith("/")) return;
+    const chatId = msg.chat.id;
+    const text = msg.text.trim();
+
+    if (text === "📱 GET NUMBER") {
+      await safeSend(
+        bot,
+        chatId,
+        "📲 *Select a service to get a virtual number:*",
+        {
+          parse_mode: "Markdown",
+          reply_markup: serviceMenuKeyboard(),
+        },
+      );
+      return;
+    }
+
+    if (text === "💰 BALANCE") {
+      try {
+        const profile = await getUserProfile();
+        await safeSend(
+          bot,
+          chatId,
+          `💰 *Your 5sim Balance*\n\n` +
+            `👤 Email: ${profile.email}\n` +
+            `💵 Balance: *$${profile.balance.toFixed(2)}*\n` +
+            `⭐ Rating: ${profile.rating}`,
+          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+        );
+      } catch (err) {
+        logger.error({ err }, "Balance fetch failed");
+        await safeSend(
+          bot,
+          chatId,
+          "⚠️ Could not fetch your balance. Please try again later.",
+          { reply_markup: mainMenuKeyboard() },
+        );
+      }
+      return;
+    }
+
+    if (text === "📊 TRAFFIC") {
+      try {
+        const profile = await getUserProfile();
+        await safeSend(
+          bot,
+          chatId,
+          `📊 *Your 5sim Account Info*\n\n` +
+            `👤 Email: ${profile.email}\n` +
+            `💵 Balance: $${profile.balance.toFixed(2)}\n` +
+            `⭐ Rating: ${profile.rating}`,
+          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+        );
+      } catch (err) {
+        logger.error({ err }, "Traffic fetch failed");
+        await safeSend(
+          bot,
+          chatId,
+          "⚠️ Could not fetch account info. Please try again later.",
+          { reply_markup: mainMenuKeyboard() },
+        );
+      }
+      return;
+    }
+
+    if (text === "🆘 SUPPORT") {
+      await safeSend(
+        bot,
+        chatId,
+        "🆘 *Support*\n\n" +
+          "For help with your 5sim account:\n" +
+          "🌐 Website: https://5sim.net\n" +
+          "📧 Support: https://5sim.net/support\n\n" +
+          "For bot issues, contact your bot administrator.",
+        { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+      );
+      return;
+    }
+
+    if (text === "🆕 আমি নতুন") {
+      await safeSend(
+        bot,
+        chatId,
+        "🆕 *আমি নতুন — স্বাগতম!*\n\n" +
+          "এই বট দিয়ে আপনি 5sim থেকে ভার্চুয়াল নম্বর কিনতে পারবেন।\n\n" +
+          "*কিভাবে শুরু করবেন:*\n" +
+          "1️⃣ *GET NUMBER* বাটন চাপুন\n" +
+          "2️⃣ আপনার সার্ভিস বেছে নিন (Facebook, Instagram, TikTok)\n" +
+          "3️⃣ দেশ বেছে নিন\n" +
+          "4️⃣ নম্বর পাবেন — SMS কোড আসার জন্য অপেক্ষা করুন\n\n" +
+          "💰 *ব্যালেন্স* দেখতে BALANCE বাটন চাপুন।\n" +
+          "5sim অ্যাকাউন্ট না থাকলে 👉 https://5sim.net এ সাইন আপ করুন।",
+        { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+      );
+      return;
+    }
+
+    // Unknown message — show main menu
+    await safeSend(bot, chatId, "Please choose an option from the menu below:", {
+      reply_markup: mainMenuKeyboard(),
+    });
+  });
+
+  // Callback query handler — inline keyboard interactions
+  bot.on("callback_query", async (query) => {
+    if (!query.data || !query.message) return;
+    const chatId = query.message.chat.id;
+    const userId = query.from.id;
+    const data = query.data;
+
+    // Always acknowledge the callback immediately
+    try {
+      await bot.answerCallbackQuery(query.id);
+    } catch {
+      // ignore
+    }
+
+    // ── Service selected ──────────────────────────────────────────────────────
+    if (data.startsWith("service:")) {
+      const serviceCode = data.slice("service:".length);
+      setState(userId, { selectedService: serviceCode });
+
+      const serviceLabel =
+        SERVICES.find((s) => s.code === serviceCode)?.label ?? serviceCode;
+
+      try {
+        await bot.editMessageText(
+          `🔍 Fetching available countries for *${serviceLabel}*…`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+          },
+        );
+
+        const countries = await getAvailableCountries(serviceCode);
+
+        if (countries.length === 0) {
+          await bot.editMessageText(
+            `😔 No countries currently have stock for *${serviceLabel}*. Please try again later.`,
+            {
+              chat_id: chatId,
+              message_id: query.message.message_id,
+              parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "⬅️ Back", callback_data: "back_to_services" }],
+                ],
+              },
+            },
+          );
+          return;
+        }
+
+        await bot.editMessageText(
+          `🌍 *Select a country for ${serviceLabel}:*`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+            reply_markup: countryKeyboard(countries),
+          },
+        );
+      } catch (err) {
+        logger.error({ err }, "Failed to fetch countries");
+        await bot.editMessageText(
+          "⚠️ Failed to fetch available countries. Please try again.",
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "⬅️ Back", callback_data: "back_to_services" }],
+              ],
+            },
+          },
+        );
+      }
+      return;
+    }
+
+    // ── Country selected → buy number ─────────────────────────────────────────
+    if (data.startsWith("country:")) {
+      const country = data.slice("country:".length);
+      const state = getState(userId);
+      const service = state.selectedService;
+
+      if (!service) {
+        await safeSend(bot, chatId, "⚠️ Session expired. Please start over.", {
+          reply_markup: mainMenuKeyboard(),
+        });
+        return;
+      }
+
+      try {
+        await bot.editMessageText(
+          `⏳ Purchasing number in *${formatCountry(country)}*…`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+          },
+        );
+
+        const order = await buyNumber(country, service);
+        setState(userId, { activeOrderId: order.id });
+
+        const serviceLabel =
+          SERVICES.find((s) => s.code === service)?.label ?? service;
+        const displayCountry = formatCountry(country);
+
+        await bot.editMessageText(
+          `✅ *Number Acquired!*\n\n` +
+            `📱 Number: \`${order.phone}\`\n` +
+            `🌍 Country: ${displayCountry}\n` +
+            `📲 Service: ${serviceLabel}\n` +
+            `💵 Price: $${order.price.toFixed(2)}\n` +
+            `🆔 Order ID: ${order.id}\n\n` +
+            `⏳ Waiting for SMS… Forward any code you receive here.`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+            reply_markup: cancelOrderKeyboard(order.id),
+          },
+        );
+      } catch (err) {
+        logger.error({ err }, "Number purchase failed");
+
+        const userMsg = isLowBalanceError(err)
+          ? "⚠️ *Your 5sim account balance is too low.*\n\nPlease recharge your 5sim account at https://5sim.net and try again."
+          : "⚠️ *Purchase failed.* The number could not be acquired. Please try a different country or try again later.";
+
+        await bot.editMessageText(userMsg, {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "⬅️ Back", callback_data: "back_to_services" }],
+            ],
+          },
+        });
+      }
+      return;
+    }
+
+    // ── Cancel order ─────────────────────────────────────────────────────────
+    if (data.startsWith("cancel:")) {
+      const orderId = parseInt(data.slice("cancel:".length), 10);
+
+      try {
+        await cancelOrder(orderId);
+        clearOrderState(userId);
+
+        await bot.editMessageText(
+          `🚫 *Order #${orderId} has been cancelled.*\n\nYou can get a new number from the main menu.`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+          },
+        );
+
+        await safeSend(bot, chatId, "What would you like to do next?", {
+          reply_markup: mainMenuKeyboard(),
+        });
+      } catch (err) {
+        logger.error({ err }, "Cancel order failed");
+        await safeSend(
+          bot,
+          chatId,
+          "⚠️ Could not cancel the order. It may have already been cancelled or completed.",
+          { reply_markup: mainMenuKeyboard() },
+        );
+      }
+      return;
+    }
+
+    // ── Back to service menu ──────────────────────────────────────────────────
+    if (data === "back_to_services") {
+      await bot.editMessageText("📲 *Select a service to get a virtual number:*", {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: "Markdown",
+        reply_markup: serviceMenuKeyboard(),
+      });
+      return;
+    }
+
+    // ── Close service menu ────────────────────────────────────────────────────
+    if (data === "close_service_menu") {
+      try {
+        await bot.deleteMessage(chatId, query.message.message_id);
+      } catch {
+        await bot.editMessageText("Menu closed.", {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+        });
+      }
+      return;
+    }
+  });
+}
