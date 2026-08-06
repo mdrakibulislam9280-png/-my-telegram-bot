@@ -5,6 +5,7 @@
 
 export interface UserState {
   selectedService?: string;                              // e.g. "facebook"
+  selectedCountry?: string;                             // last selected country key
   activeOrderId?: number;                               // ongoing order the user can cancel
   withdrawStep?: "awaiting_account" | "awaiting_amount"; // withdrawal flow
   withdrawMethod?: "nogod" | "binance";                 // chosen payment method

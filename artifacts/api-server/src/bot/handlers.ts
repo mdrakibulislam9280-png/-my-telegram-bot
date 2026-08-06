@@ -16,10 +16,24 @@ import { ADMIN_TELEGRAM_ID } from "../lib/config";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SERVICES: { label: string; code: string }[] = [
-  { label: "🇫 FACEBOOK", code: "facebook" },
-  { label: "🟢 INSTAGRAM", code: "instagram" },
-  { label: "🖤 TIKTOK", code: "tiktok" },
+  { label: "🔵 Facebook", code: "facebook" },
+  { label: "📸 Instagram", code: "instagram" },
+  { label: "🎵 TikTok", code: "tiktok" },
 ];
+
+const OTHER_SERVICES: { label: string; code: string }[] = [
+  { label: "💬 WhatsApp", code: "whatsapp" },
+  { label: "🔍 Google", code: "google" },
+  { label: "🐦 Twitter", code: "twitter" },
+  { label: "📢 Telegram", code: "telegram" },
+];
+
+/** Lookup label for a service code across both lists. */
+function serviceLabel(code: string): string {
+  return (
+    [...SERVICES, ...OTHER_SERVICES].find((s) => s.code === code)?.label ?? code
+  );
+}
 
 // ─── Keyboards ────────────────────────────────────────────────────────────────
 
@@ -36,28 +50,59 @@ function mainMenuKeyboard(): TelegramBot.ReplyKeyboardMarkup {
 }
 
 function serviceMenuKeyboard(): TelegramBot.InlineKeyboardMarkup {
-  const rows = SERVICES.map((s) => [
-    { text: s.label, callback_data: `service:${s.code}` },
-  ]);
-  rows.push([{ text: "❌ Close", callback_data: "close_service_menu" }]);
+  return {
+    inline_keyboard: [
+      [
+        { text: "🔵 Facebook",  callback_data: "service:facebook" },
+        { text: "📸 Instagram", callback_data: "service:instagram" },
+      ],
+      [
+        { text: "🎵 TikTok",   callback_data: "service:tiktok" },
+        { text: "🌐 Others",   callback_data: "service_category:others" },
+      ],
+      [{ text: "❌ Close", callback_data: "close_service_menu" }],
+    ],
+  };
+}
+
+function othersMenuKeyboard(): TelegramBot.InlineKeyboardMarkup {
+  const rows: TelegramBot.InlineKeyboardButton[][] = [];
+  for (let i = 0; i < OTHER_SERVICES.length; i += 2) {
+    rows.push(
+      OTHER_SERVICES.slice(i, i + 2).map((s) => ({
+        text: s.label,
+        callback_data: `service:${s.code}`,
+      })),
+    );
+  }
+  rows.push([{ text: "⬅️ Back", callback_data: "back_to_services" }]);
   return { inline_keyboard: rows };
 }
 
 function countryKeyboard(
   countries: string[],
 ): TelegramBot.InlineKeyboardMarkup {
-  const rows = countries.map((c) => [
-    { text: formatCountry(c), callback_data: `country:${c}` },
-  ]);
+  const rows: TelegramBot.InlineKeyboardButton[][] = [];
+  for (let i = 0; i < countries.length; i += 2) {
+    rows.push(
+      countries.slice(i, i + 2).map((c) => ({
+        text: formatCountry(c),
+        callback_data: `country:${c}`,
+      })),
+    );
+  }
   rows.push([{ text: "⬅️ Back", callback_data: "back_to_services" }]);
   return { inline_keyboard: rows };
 }
 
-function cancelOrderKeyboard(
-  orderId: number,
-): TelegramBot.InlineKeyboardMarkup {
+function numberAcquiredKeyboard(orderId: number): TelegramBot.InlineKeyboardMarkup {
   return {
     inline_keyboard: [
+      [
+        { text: "🔄 Change Number",  callback_data: "change_number" },
+        { text: "🌍 Change Country", callback_data: "back_to_countries" },
+      ],
+      [{ text: "👥 Otp Group", url: "https://t.me/Rakibul_Otp_Rcv" }],
       [{ text: "❌ Cancel Order", callback_data: `cancel:${orderId}` }],
     ],
   };
@@ -553,17 +598,13 @@ export function registerHandlers(bot: TelegramBot): void {
         );
 
         const order = await buyNumber(country, service);
-        setState(userId, { activeOrderId: order.id });
-
-        const serviceLabel =
-          SERVICES.find((s) => s.code === service)?.label ?? service;
-        const displayCountry = formatCountry(country);
+        setState(userId, { activeOrderId: order.id, selectedCountry: country });
 
         await bot.editMessageText(
           `✅ *Number Acquired!*\n\n` +
             `📱 Number: \`${order.phone}\`\n` +
-            `🌍 Country: ${displayCountry}\n` +
-            `📲 Service: ${serviceLabel}\n` +
+            `🌍 Country: ${formatCountry(country)}\n` +
+            `📲 Service: ${serviceLabel(service)}\n` +
             `💵 Price: $${order.price.toFixed(2)}\n` +
             `🆔 Order ID: ${order.id}\n\n` +
             `⏳ Waiting for SMS… Forward any code you receive here.`,
@@ -571,7 +612,7 @@ export function registerHandlers(bot: TelegramBot): void {
             chat_id: chatId,
             message_id: query.message.message_id,
             parse_mode: "Markdown",
-            reply_markup: cancelOrderKeyboard(order.id),
+            reply_markup: numberAcquiredKeyboard(order.id),
           },
         );
       } catch (err) {
@@ -623,6 +664,102 @@ export function registerHandlers(bot: TelegramBot): void {
           "⚠️ Could not cancel the order. It may have already been cancelled or completed.",
           { reply_markup: mainMenuKeyboard() },
         );
+      }
+      return;
+    }
+
+    // ── Others service sub-menu ───────────────────────────────────────────────
+    if (data === "service_category:others") {
+      await bot.editMessageText("🌐 *Select a service:*", {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: "Markdown",
+        reply_markup: othersMenuKeyboard(),
+      });
+      return;
+    }
+
+    // ── Change Number (same country, same service) ────────────────────────────
+    if (data === "change_number") {
+      const st = getState(userId);
+      if (!st.selectedService || !st.selectedCountry) {
+        await safeSend(bot, chatId, "⚠️ Session expired. Please start over.", {
+          reply_markup: mainMenuKeyboard(),
+        });
+        return;
+      }
+      try {
+        await bot.editMessageText(
+          `⏳ Getting a new number in *${formatCountry(st.selectedCountry)}*…`,
+          { chat_id: chatId, message_id: query.message.message_id, parse_mode: "Markdown" },
+        );
+        // Cancel previous order silently
+        if (st.activeOrderId) {
+          try { await cancelOrder(st.activeOrderId); } catch { /* ignore */ }
+        }
+        const order = await buyNumber(st.selectedCountry, st.selectedService);
+        setState(userId, { activeOrderId: order.id });
+        await bot.editMessageText(
+          `✅ *New Number Acquired!*\n\n` +
+            `📱 Number: \`${order.phone}\`\n` +
+            `🌍 Country: ${formatCountry(st.selectedCountry)}\n` +
+            `📲 Service: ${serviceLabel(st.selectedService)}\n` +
+            `💵 Price: $${order.price.toFixed(2)}\n` +
+            `🆔 Order ID: ${order.id}\n\n` +
+            `⏳ Waiting for SMS… Forward any code you receive here.`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+            reply_markup: numberAcquiredKeyboard(order.id),
+          },
+        );
+      } catch (err) {
+        logger.error({ err }, "Change number failed");
+        const msg = isLowBalanceError(err)
+          ? "⚠️ *5sim balance too low.* Please recharge and try again."
+          : "⚠️ Could not get a new number. Please try again.";
+        await bot.editMessageText(msg, {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "back_to_services" }]] },
+        });
+      }
+      return;
+    }
+
+    // ── Change Country (same service, re-fetch country list) ──────────────────
+    if (data === "back_to_countries") {
+      const st = getState(userId);
+      if (!st.selectedService) {
+        await safeSend(bot, chatId, "⚠️ Session expired. Please start over.", {
+          reply_markup: mainMenuKeyboard(),
+        });
+        return;
+      }
+      try {
+        await bot.editMessageText("🔍 Fetching available countries…", {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+        });
+        const countries = await getAvailableCountries(st.selectedService);
+        await bot.editMessageText(
+          `🌍 *Select a country for ${serviceLabel(st.selectedService)}:*`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown",
+            reply_markup: countryKeyboard(countries),
+          },
+        );
+      } catch (err) {
+        logger.error({ err }, "back_to_countries failed");
+        await bot.editMessageText("⚠️ Could not fetch countries. Please try again.", {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "back_to_services" }]] },
+        });
       }
       return;
     }
