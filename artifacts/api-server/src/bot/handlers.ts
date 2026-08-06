@@ -434,8 +434,8 @@ export function registerHandlers(bot: TelegramBot): void {
           parse_mode: "Markdown",
           reply_markup: {
             inline_keyboard: [
-              [{ text: "📱 Nogod", callback_data: "withdraw_method:nogod" }],
-              [{ text: "💱 Binance (USDT BEP20)", callback_data: "withdraw_method:binance" }],
+              [{ text: "🟠 Nogod", callback_data: "withdraw_method:nogod" }],
+              [{ text: "🟡 Binance (USDT BEP20)", callback_data: "withdraw_method:binance" }],
               [{ text: "❌ Cancel", callback_data: "withdraw_cancel" }],
             ],
           },
