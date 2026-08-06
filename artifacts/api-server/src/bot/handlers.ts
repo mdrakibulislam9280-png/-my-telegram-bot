@@ -6,7 +6,8 @@ import {
   cancelOrder,
 } from "./fivesim";
 import { formatCountry, toDisplayName } from "./countries";
-import { getState, setState, clearOrderState } from "./state";
+import { getState, setState, clearOrderState, clearWithdrawState } from "./state";
+import { processWithdrawal, WITHDRAWAL_FEE_BDT, WITHDRAWAL_MIN_BDT } from "./withdrawal";
 import { getOrCreateWallet } from "./wallet";
 import { getReferralCode, getReferralStats, processReferral } from "./referral";
 import { checkMembership, sendJoinPrompt } from "./membership";
@@ -98,6 +99,13 @@ export function registerHandlers(bot: TelegramBot): void {
     const userId = msg.from!.id;
     const param = match?.[1]?.trim();
 
+    // ── Force-subscription gate ───────────────────────────────────────────────
+    const membership = await checkMembership(bot, userId);
+    if (!membership.joined) {
+      await sendJoinPrompt(bot, chatId, membership);
+      return;
+    }
+
     // Process referral if a code was passed
     if (param?.startsWith("ref_")) {
       // Ensure referred user has a wallet first
@@ -137,6 +145,71 @@ export function registerHandlers(bot: TelegramBot): void {
       return;
     }
 
+    // ── Withdrawal flow — intercept free-text input ───────────────────────────
+    const userState = getState(msg.from!.id);
+
+    if (userState.withdrawStep === "awaiting_account") {
+      const method = userState.withdrawMethod!;
+      const label = method === "nogod" ? "Nogod" : "Binance USDT BEP20";
+      setState(msg.from!.id, { withdrawAccount: text, withdrawStep: "awaiting_amount" });
+      await safeSend(
+        bot,
+        chatId,
+        `✅ *${label} account saved.*\n\n` +
+          `💵 Now enter the amount you want to withdraw (BDT):\n\n` +
+          `📌 Minimum: *${WITHDRAWAL_MIN_BDT} BDT*\n` +
+          `📌 Fee: *${WITHDRAWAL_FEE_BDT} BDT* (deducted from your balance)`,
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+
+    if (userState.withdrawStep === "awaiting_amount") {
+      const amount = parseFloat(text.replace(/,/g, ""));
+      if (isNaN(amount) || amount <= 0) {
+        await safeSend(bot, chatId, "⚠️ Please enter a valid numeric amount.", {});
+        return;
+      }
+
+      const result = await processWithdrawal(
+        msg.from!.id,
+        userState.withdrawMethod!,
+        userState.withdrawAccount!,
+        amount,
+      );
+      clearWithdrawState(msg.from!.id);
+
+      if (result.ok) {
+        const methodLabel = userState.withdrawMethod === "nogod" ? "Nogod" : "Binance USDT BEP20";
+        await safeSend(
+          bot,
+          chatId,
+          `💸 *Payment Successful!*\n\n` +
+            `📤 Method: *${methodLabel}*\n` +
+            `💳 Account: \`${userState.withdrawAccount}\`\n` +
+            `💵 Amount: *${amount.toFixed(2)} BDT*\n` +
+            `🔻 Fee: *${WITHDRAWAL_FEE_BDT} BDT*\n` +
+            `✅ Net Withdrawn: *${amount.toFixed(2)} BDT*`,
+          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+        );
+      } else if (result.reason === "below_minimum") {
+        await safeSend(
+          bot,
+          chatId,
+          `⚠️ *Minimum withdrawal is ${WITHDRAWAL_MIN_BDT} BDT.*\n\nPlease try again with a higher amount.`,
+          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+        );
+      } else {
+        await safeSend(
+          bot,
+          chatId,
+          `❌ *Insufficient balance.*\n\nYou need at least *${amount + WITHDRAWAL_FEE_BDT} BDT* (amount + ${WITHDRAWAL_FEE_BDT} BDT fee) to complete this withdrawal.`,
+          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+        );
+      }
+      return;
+    }
+
     if (text === "📱 GET NUMBER") {
       await safeSend(
         bot,
@@ -157,11 +230,19 @@ export function registerHandlers(bot: TelegramBot): void {
           bot,
           chatId,
           `💰 *Your Account Balance*\n\n` +
-            `👤 User ID: ${msg.from!.id}\n` +
+            `👤 User ID: \`${msg.from!.id}\`\n` +
             `💳 Balance: *${parseFloat(wallet.balanceBdt).toFixed(2)} BDT*\n` +
+            `📤 Total Withdrawn: *${parseFloat(wallet.totalWithdrawnBdt).toFixed(2)} BDT*\n` +
             `📊 Total Orders: ${wallet.totalOrders}\n\n` +
-            `💡 To deposit funds into your wallet, please contact support.`,
-          { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
+            `💡 To deposit funds, please contact support.`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "💸 Withdraw", callback_data: "withdraw_start" }],
+              ],
+            },
+          },
         );
       } catch (err) {
         logger.error({ err }, "Balance fetch failed");
@@ -314,6 +395,50 @@ export function registerHandlers(bot: TelegramBot): void {
           await sendJoinPrompt(bot, chatId, status);
         }
       }
+      return;
+    }
+
+    // ── Withdraw: show payment method selection ───────────────────────────────
+    if (data === "withdraw_start") {
+      await safeSend(
+        bot,
+        chatId,
+        `💸 *Withdraw Funds*\n\n` +
+          `Select your preferred payment method:\n\n` +
+          `📌 Minimum: *${WITHDRAWAL_MIN_BDT} BDT*\n` +
+          `📌 Fee: *${WITHDRAWAL_FEE_BDT} BDT* per withdrawal`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📱 Nogod", callback_data: "withdraw_method:nogod" }],
+              [{ text: "💱 Binance (USDT BEP20)", callback_data: "withdraw_method:binance" }],
+              [{ text: "❌ Cancel", callback_data: "withdraw_cancel" }],
+            ],
+          },
+        },
+      );
+      return;
+    }
+
+    // ── Withdraw: payment method chosen ──────────────────────────────────────
+    if (data === "withdraw_method:nogod" || data === "withdraw_method:binance") {
+      const method = data === "withdraw_method:nogod" ? "nogod" : "binance";
+      const prompt =
+        method === "nogod"
+          ? "📱 Please enter your *Nogod* number:"
+          : "💱 Please enter your *Binance USDT BEP20* wallet address:";
+      setState(userId, { withdrawMethod: method, withdrawStep: "awaiting_account" });
+      await safeSend(bot, chatId, prompt, { parse_mode: "Markdown" });
+      return;
+    }
+
+    // ── Withdraw: cancel ──────────────────────────────────────────────────────
+    if (data === "withdraw_cancel") {
+      clearWithdrawState(userId);
+      await safeSend(bot, chatId, "❌ Withdrawal cancelled.", {
+        reply_markup: mainMenuKeyboard(),
+      });
       return;
     }
 

@@ -12,6 +12,9 @@ export const userWalletsTable = pgTable("user_wallets", {
   referralEarningsBdt: numeric("referral_earnings_bdt", { precision: 12, scale: 2 })
     .notNull()
     .default("0.00"),
+  totalWithdrawnBdt: numeric("total_withdrawn_bdt", { precision: 12, scale: 2 })
+    .notNull()
+    .default("0.00"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
