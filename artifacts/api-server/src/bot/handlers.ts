@@ -11,6 +11,7 @@ import { processWithdrawal, WITHDRAWAL_FEE_BDT, WITHDRAWAL_MIN_BDT } from "./wit
 import { getOrCreateWallet } from "./wallet";
 import { getReferralCode, getReferralStats, processReferral } from "./referral";
 import { checkMembership, sendJoinPrompt } from "./membership";
+import { ADMIN_TELEGRAM_ID } from "../lib/config";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,9 @@ export function registerHandlers(bot: TelegramBot): void {
 
       if (result.ok) {
         const methodLabel = userState.withdrawMethod === "nogod" ? "Nogod" : "Binance USDT BEP20";
+        const username = msg.from!.username ? `@${msg.from!.username}` : "N/A";
+
+        // Notify user
         await safeSend(
           bot,
           chatId,
@@ -192,6 +196,25 @@ export function registerHandlers(bot: TelegramBot): void {
             `✅ Net Withdrawn: *${amount.toFixed(2)} BDT*`,
           { parse_mode: "Markdown", reply_markup: mainMenuKeyboard() },
         );
+
+        // Notify admin
+        if (ADMIN_TELEGRAM_ID) {
+          await safeSend(
+            bot,
+            ADMIN_TELEGRAM_ID,
+            `🔔 *New Withdrawal Request*\n\n` +
+              `👤 User: ${username}\n` +
+              `🆔 Telegram ID: \`${msg.from!.id}\`\n` +
+              `📤 Method: *${methodLabel}*\n` +
+              `💳 Account: \`${userState.withdrawAccount}\`\n` +
+              `💵 Amount: *${amount.toFixed(2)} BDT*\n` +
+              `🔻 Fee: *${WITHDRAWAL_FEE_BDT} BDT*\n` +
+              `✅ Net to Pay: *${amount.toFixed(2)} BDT*`,
+            { parse_mode: "Markdown" },
+          );
+        } else {
+          logger.warn("ADMIN_TELEGRAM_ID is not set — withdrawal notification skipped");
+        }
       } else if (result.reason === "below_minimum") {
         await safeSend(
           bot,
