@@ -1,4 +1,4 @@
-const BASE_URL = "https://stexsms.com";
+const BASE_URL = "https://api.2oo9.cloud/MX547FLFX8U/tness/@public/api";
 
 export interface PricesResponse {
   [country: string]: {
@@ -30,10 +30,10 @@ export interface UserProfile {
 
 function getAuthHeaders(): Record<string, string> {
   const key = "M2G10SHOAN3";
-  if (!key) throw new Error("FIVESIM_API_KEY is not set");
+  if (!key) throw new Error("API KEY is not set");
   return {
-    Authorization: `Bearer ${key}`,
-    Accept: "application/json",
+    "mauthapi": key,
+    "Accept": "application/json"
   };
 }
 
