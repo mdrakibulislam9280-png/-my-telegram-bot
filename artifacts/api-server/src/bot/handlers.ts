@@ -47,14 +47,21 @@ function serviceMenuKeyboard(): TelegramBot.InlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
-        { text: "🔵 Facebook",  callback_data: "service:facebook" },
-        { text: "📸 Instagram", callback_data: "service:instagram" },
+        {
+          text: "🔵 FACEBOOK",
+          callback_data: "service:facebook",
+        },
+        {
+          text: "🟣 INSTAGRAM",
+          callback_data: "service:instagram",
+        },
       ],
       [
-        { text: "🎵 TikTok",   callback_data: "service:tiktok" },
-        { text: "🌐 Others",   callback_data: "service_category:others" },
+        {
+          text: "❌ CLOSE",
+          callback_data: "close_service_menu",
+        },
       ],
-      [{ text: "❌ Close", callback_data: "close_service_menu" }],
     ],
   };
 }
