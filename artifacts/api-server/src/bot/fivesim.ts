@@ -56,13 +56,12 @@ export async function getAvailableCountries(
   }
 
   const data = await res.json();
-  const available: string[] = [];
   
-  if (data && data.data && data.data.country) {
-    available.push(data.data.country);
+  if (data && data.success && data.data) {
+    return [data.data.country || "Any"];
   }
 
-  return available;
+  return ["Global"];
 }
 
 /**
@@ -86,9 +85,14 @@ export async function getTopCountriesByStock(
   const data = await res.json();
   const results: { country: string; count: number }[] = [];
 
-  if (data && data.data && data.data.country) {
+  if (data && data.success && data.data) {
     results.push({
-      country: data.data.country,
+      country: data.data.country || "Global",
+      count: 1
+    });
+  } else {
+    results.push({
+      country: "Global",
       count: 1
     });
   }
@@ -173,4 +177,4 @@ export async function getUserProfile(): Promise<UserProfile> {
     balance: 100,
     rating: 5,
   };
-    }
+}
