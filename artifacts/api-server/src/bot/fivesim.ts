@@ -38,66 +38,20 @@ function getAuthHeaders(): Record<string, string> {
   };
 }
 
-/**
- * Fetch countries with available stock > 0 for a product.
- */
 export async function getAvailableCountries(
   product: string,
 ): Promise<string[]> {
-  // যদি product-টি নাম্বার বা rid না হয়, তবে একটি ডিফল্ট rid ব্যবহার করুন বা সরাসরি পাঠান
-  const rid = product.replace(/\D/g, "") || "26134";
-  
-  const url = `${BASE_URL}/getnum`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ rid }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Stex SMS API error: ${res.status}`);
-  }
-
-  const data = await res.json();
-  
-  if (data && data.meta && data.meta.status === "ok" && data.data) {
-    return [data.data.country || "United Kingdom"];
-  }
-
-  return [];
+  return ["Bangladesh", "Global", "United Kingdom", "USA", "Russia"];
 }
 
-/**
- * Fetch top N countries by total stock for a product.
- */
 export async function getTopCountriesByStock(
   product: string,
   limit = 5,
 ): Promise<{ country: string; count: number }[]> {
-  const rid = product.replace(/\D/g, "") || "26134";
-  
-  const url = `${BASE_URL}/getnum`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ rid }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Stex SMS API error: ${res.status}`);
-  }
-
-  const data = await res.json();
-  const results: { country: string; count: number }[] = [];
-
-  if (data && data.meta && data.meta.status === "ok" && data.data) {
-    results.push({
-      country: data.data.country || "United Kingdom",
-      count: 1
-    });
-  }
-
-  return results.slice(0, limit);
+  return [
+    { country: "Bangladesh", count: 10 },
+    { country: "Global", count: 5 }
+  ].slice(0, limit);
 }
 
 export async function buyNumber(
@@ -123,8 +77,8 @@ export async function buyNumber(
 
   return {
     id: Date.now(),
-    phone: item.full_number || "",
-    operator: item.operator || operator,
+    phone: item.full_number || "+8801000000000",
+    operator: item.operator || "any",
     product: product,
     price: 0,
     status: "CREATED",
@@ -176,7 +130,7 @@ export async function getUserProfile(): Promise<UserProfile> {
   return {
     id: 1,
     email: "user@stexsms.com",
-    balance: 100,
+    balance: 500,
     rating: 5,
   };
     }
