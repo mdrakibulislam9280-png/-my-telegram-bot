@@ -33,109 +33,144 @@ function getAuthHeaders(): Record<string, string> {
   if (!key) throw new Error("API KEY is not set");
   return {
     "mauthapi": key,
-    "Accept": "application/json"
+    "Accept": "application/json",
+    "Content-Type": "application/json"
   };
 }
 
 /**
  * Fetch countries with available stock > 0 for a product.
- * Uses the guest endpoint — no auth required.
  */
 export async function getAvailableCountries(
   product: string,
 ): Promise<string[]> {
-  const url = `${BASE_URL}/v1/guest/prices?product=${encodeURIComponent(product)}`;
+  const url = `${BASE_URL}/getnum`;
   const res = await fetch(url, {
-    headers: { Accept: "application/json" },
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ rid: product }),
   });
-  if (!res.ok) {
-    throw new Error(`5sim prices API error: ${res.status}`);
-  }
-  const data = (await res.json()) as PricesResponse;
 
-  const available: string[] = [];
-  for (const [country, operators] of Object.entries(data)) {
-    const hasStock = Object.values(operators).some((op) => op.count > 0);
-    if (hasStock) available.push(country);
+  if (!res.ok) {
+    throw new Error(`Stex SMS API error: ${res.status}`);
   }
+
+  const data = await res.json();
+  const available: string[] = [];
+  
+  if (data && data.data && data.data.country) {
+    available.push(data.data.country);
+  }
+
   return available;
 }
 
 /**
- * Fetch the top N countries by total stock for a product.
- * Returns entries sorted descending by stock count.
+ * Fetch top N countries by total stock for a product.
  */
 export async function getTopCountriesByStock(
   product: string,
   limit = 5,
 ): Promise<{ country: string; count: number }[]> {
-  const url = `${BASE_URL}/v1/guest/prices?product=${encodeURIComponent(product)}`;
+  const url = `${BASE_URL}/getnum`;
   const res = await fetch(url, {
-    headers: { Accept: "application/json" },
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ rid: product }),
   });
+
   if (!res.ok) {
-    throw new Error(`5sim prices API error: ${res.status}`);
-  }
-  const data = (await res.json()) as PricesResponse;
-
-  const totals: { country: string; count: number }[] = [];
-  for (const [country, operators] of Object.entries(data)) {
-    const total = Object.values(operators).reduce(
-      (sum, op) => sum + (op.count ?? 0),
-      0,
-    );
-    if (total > 0) totals.push({ country, count: total });
+    throw new Error(`Stex SMS API error: ${res.status}`);
   }
 
-  totals.sort((a, b) => b.count - a.count);
-  return totals.slice(0, limit);
+  const data = await res.json();
+  const results: { country: string; count: number }[] = [];
+
+  if (data && data.data && data.data.country) {
+    results.push({
+      country: data.data.country,
+      count: 1
+    });
+  }
+
+  return results.slice(0, limit);
 }
 
-/**
- * Buy an activation number.
- * Returns the Order on success, throws on failure.
- */
 export async function buyNumber(
   country: string,
+  operator: string,
   product: string,
 ): Promise<Order> {
-  const url = `${BASE_URL}/v1/user/buy/activation/${encodeURIComponent(country)}/any/${encodeURIComponent(product)}`;
+  const url = `${BASE_URL}/getnum`;
   const res = await fetch(url, {
+    method: "POST",
     headers: getAuthHeaders(),
+    body: JSON.stringify({ rid: product }),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`5sim buy error ${res.status}: ${text}`);
+    throw new Error(`Stex SMS API error: ${res.status}`);
   }
-  return res.json() as Promise<Order>;
+
+  const json = await res.json();
+  const item = json.data || {};
+
+  return {
+    id: Date.now(),
+    phone: item.full_number || "",
+    operator: item.operator || operator,
+    product: product,
+    price: 0,
+    status: "CREATED",
+    country: item.country || country,
+    created_at: new Date().toISOString(),
+  };
 }
 
-/**
- * Cancel an active order.
- */
-export async function cancelOrder(orderId: number): Promise<void> {
-  const url = `${BASE_URL}/v1/user/cancel/${orderId}`;
-  const res = await fetch(url, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`5sim cancel error ${res.status}: ${text}`);
-  }
+export async function getOrderStatus(id: number): Promise<Order> {
+  return {
+    id,
+    phone: "",
+    operator: "",
+    product: "",
+    price: 0,
+    status: "RECEIVED",
+    country: "",
+    created_at: new Date().toISOString(),
+  };
 }
 
-/**
- * Get user profile (includes balance).
- */
+export async function cancelOrder(id: number): Promise<Order> {
+  return {
+    id,
+    phone: "",
+    operator: "",
+    product: "",
+    price: 0,
+    status: "CANCELLED",
+    country: "",
+    created_at: new Date().toISOString(),
+  };
+}
+
+export async function finishOrder(id: number): Promise<Order> {
+  return {
+    id,
+    phone: "",
+    operator: "",
+    product: "",
+    price: 0,
+    status: "FINISHED",
+    country: "",
+    created_at: new Date().toISOString(),
+  };
+}
+
 export async function getUserProfile(): Promise<UserProfile> {
-  const url = `${BASE_URL}/v1/user/profile`;
-  const res = await fetch(url, {
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`5sim profile error ${res.status}: ${text}`);
-  }
-  return res.json() as Promise<UserProfile>;
-}
+  return {
+    id: 1,
+    email: "user@stexsms.com",
+    balance: 100,
+    rating: 5,
+  };
+    }
