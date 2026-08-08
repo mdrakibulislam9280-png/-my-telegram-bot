@@ -15,18 +15,12 @@ import { ADMIN_TELEGRAM_ID } from "../lib/config";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SERVICES: { label: string; code: string }[] = [
+const const SERVICES: { label: string; code: string }[] = [
   { label: "🔵 Facebook", code: "facebook" },
-  { label: "📸 Instagram", code: "instagram" },
-  { label: "🎵 TikTok", code: "tiktok" },
+  { label: "🟣 Instagram", code: "instagram" },
 ];
 
-const OTHER_SERVICES: { label: string; code: string }[] = [
-  { label: "💬 WhatsApp", code: "whatsapp" },
-  { label: "🔍 Google", code: "google" },
-  { label: "🐦 Twitter", code: "twitter" },
-  { label: "📢 Telegram", code: "telegram" },
-];
+const OTHER_SERVICES: { label: string; code: string }[] = [];
 
 /** Lookup label for a service code across both lists. */
 function serviceLabel(code: string): string {
