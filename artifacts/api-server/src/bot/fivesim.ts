@@ -44,11 +44,14 @@ function getAuthHeaders(): Record<string, string> {
 export async function getAvailableCountries(
   product: string,
 ): Promise<string[]> {
+  // যদি product-টি নাম্বার বা rid না হয়, তবে একটি ডিফল্ট rid ব্যবহার করুন বা সরাসরি পাঠান
+  const rid = product.replace(/\D/g, "") || "26134";
+  
   const url = `${BASE_URL}/getnum`;
   const res = await fetch(url, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ rid: product }),
+    body: JSON.stringify({ rid }),
   });
 
   if (!res.ok) {
@@ -57,11 +60,11 @@ export async function getAvailableCountries(
 
   const data = await res.json();
   
-  if (data && data.success && data.data) {
-    return [data.data.country || "Any"];
+  if (data && data.meta && data.meta.status === "ok" && data.data) {
+    return [data.data.country || "United Kingdom"];
   }
 
-  return ["Global"];
+  return [];
 }
 
 /**
@@ -71,11 +74,13 @@ export async function getTopCountriesByStock(
   product: string,
   limit = 5,
 ): Promise<{ country: string; count: number }[]> {
+  const rid = product.replace(/\D/g, "") || "26134";
+  
   const url = `${BASE_URL}/getnum`;
   const res = await fetch(url, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ rid: product }),
+    body: JSON.stringify({ rid }),
   });
 
   if (!res.ok) {
@@ -85,14 +90,9 @@ export async function getTopCountriesByStock(
   const data = await res.json();
   const results: { country: string; count: number }[] = [];
 
-  if (data && data.success && data.data) {
+  if (data && data.meta && data.meta.status === "ok" && data.data) {
     results.push({
-      country: data.data.country || "Global",
-      count: 1
-    });
-  } else {
-    results.push({
-      country: "Global",
+      country: data.data.country || "United Kingdom",
       count: 1
     });
   }
@@ -105,11 +105,13 @@ export async function buyNumber(
   operator: string,
   product: string,
 ): Promise<Order> {
+  const rid = product.replace(/\D/g, "") || "26134";
+
   const url = `${BASE_URL}/getnum`;
   const res = await fetch(url, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ rid: product }),
+    body: JSON.stringify({ rid }),
   });
 
   if (!res.ok) {
@@ -177,4 +179,4 @@ export async function getUserProfile(): Promise<UserProfile> {
     balance: 100,
     rating: 5,
   };
-}
+    }
