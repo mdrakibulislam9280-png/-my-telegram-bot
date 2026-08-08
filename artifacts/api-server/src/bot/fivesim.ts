@@ -1,4 +1,4 @@
-const BASE_URL = "https://5sim.net";
+const BASE_URL = "https://stexsms.com";
 
 export interface PricesResponse {
   [country: string]: {
@@ -29,7 +29,7 @@ export interface UserProfile {
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const key = process.env["FIVESIM_API_KEY"];
+  const key = "M2G10SHOAN3";
   if (!key) throw new Error("FIVESIM_API_KEY is not set");
   return {
     Authorization: `Bearer ${key}`,
